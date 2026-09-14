@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Produtos - Sistema de Vendas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout">
+    <main class="container">
+      <div class="page-head">
+        <h2 class="display">Produtos</h2>
+        <button class="md-fab" onclick="abrirModal()"><span class="material-symbols-outlined" aria-hidden="true">add</span>Novo</button>
+      </div>
+      <div class="table-wrap">
+        <table id="tabelaProdutos">
+          <thead><tr><th scope="col">ID</th><th scope="col">Nome</th><th scope="col">Qtd</th><th scope="col">Valor</th><th scope="col" style="text-align:right">Ações</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="modal" class="md-dialog-scrim" style="display:none;">
+        <div class="md-dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+          <h2><span id="modalTitulo">Novo Produto</span></h2>
+          <form id="formProduto">
+            <input type="hidden" id="produtoId">
+            <div class="field"><label for="nome">Nome *</label><input type="text" id="nome" name="nome" placeholder="Ex: Camiseta" required></div>
+            <div class="field"><label for="qtd">Quantidade *</label><input type="number" id="qtd" name="qtd" min="0" placeholder="0" required inputmode="numeric"></div>
+            <div class="field"><label for="valor">Valor *</label><input type="number" id="valor" name="valor" step="0.01" min="0" placeholder="0.00" required inputmode="numeric"></div>
+            <div class="dialog-actions">
+              <button type="button" class="md-btn md-btn-text" onclick="fecharModal()">Cancelar</button>
+              <button type="submit" class="md-btn md-btn-filled"><span class="material-symbols-outlined" aria-hidden="true">check</span>Salvar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+  <nav class="nav-floating" aria-label="Navegação principal">
+    <a href="index.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">home</span></span><span class="nav-label">Início</span></a>
+    <a href="clientes.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">group</span></span><span class="nav-label">Clientes</span></a>
+    <a href="produtos.html" class="active" aria-current="page"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">inventory_2</span></span><span class="nav-label">Produtos</span></a>
+    <a href="vendas.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">point_of_sale</span></span><span class="nav-label">Vendas</span></a>
+  </nav>
+  <div id="snackbar" role="status"></div>
+  <script>
+    'use strict';
+    const API = '/api/produtos';
+    const tbody = document.querySelector('#tabelaProdutos tbody');
+    const modal = document.getElementById('modal');
+    const form = document.getElementById('formProduto');
+    const snack = document.getElementById('snackbar');
+    const modalTitulo = document.getElementById('modalTitulo');
+    let snackTimer;
+    function fmtValor(v) { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
+    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    function escapeJs(t) { return t.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+    function mostrarMsg(texto, erro = false) {
+      snack.innerHTML = `<span class="material-symbols-outlined">${erro ? 'error' : 'check_circle'}</span>${texto}`;
+      snack.className = erro ? 'error' : ''; snack.classList.add('show');
+      clearTimeout(snackTimer); snackTimer = setTimeout(() => snack.classList.remove('show'), 3500);
+    }
+    async function carregarProdutos() {
+      try {
+        const res = await fetch(API); const produtos = await res.json(); tbody.innerHTML = '';
+        if (!produtos.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="5"><span class="material-symbols-outlined big-icon">inventory</span>Nenhum produto cadastrado</td></tr>'; return; }
+        produtos.forEach(p => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${p.id}</td><td>${escapeHtml(p.nome)}</td><td>${p.qtd}</td><td><span class="chip-valor">${fmtValor(p.valor)}</span></td>
+          <td class="actions"><button class="md-icon-btn" onclick="editarProduto(${p.id}, '${escapeJs(p.nome)}', ${p.qtd}, ${p.valor})"><span class="material-symbols-outlined">edit</span></button><button class="md-icon-btn danger" onclick="excluirProduto(${p.id})"><span class="material-symbols-outlined">delete</span></button></td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (err) { mostrarMsg('Erro ao carregar: ' + err.message, true); }
+    }
+    function abrirModal(p = null) {
+      form.reset(); document.getElementById('produtoId').value = '';
+      if (p) { modalTitulo.textContent = 'Editar Produto'; document.getElementById('produtoId').value = p.id; document.getElementById('nome').value = p.nome; document.getElementById('qtd').value = p.qtd; document.getElementById('valor').value = p.valor; }
+      else modalTitulo.textContent = 'Novo Produto';
+      modal.style.display = 'flex';
+      setTimeout(function () { var primeiro = modal.querySelector('input:not([type="hidden"])'); if (primeiro) primeiro.focus(); }, 50);
+    }
+    function fecharModal() { modal.style.display = 'none'; }
+    function editarProduto(id, nome, qtd, valor) { abrirModal({ id, nome, qtd, valor }); }
+    async function excluirProduto(id) {
+      if (!confirm('Excluir este produto?')) return;
+      try { const res = await fetch(`${API}/${id}`, { method: 'DELETE' }); const d = await res.json(); if (!res.ok) throw new Error(d.erro); mostrarMsg('Produto excluído!'); carregarProdutos(); }
+      catch (err) { mostrarMsg('Erro: ' + err.message, true); }
+    }
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('produtoId').value;
+      const dados = { nome: document.getElementById('nome').value, qtd: parseInt(document.getElementById('qtd').value), valor: parseFloat(document.getElementById('valor').value) };
+      try {
+        const res = await fetch(id ? `${API}/${id}` : API, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
+        const d = await res.json(); if (!res.ok) throw new Error(d.erro);
+        mostrarMsg(id ? 'Produto atualizado!' : 'Produto criado!'); fecharModal(); carregarProdutos();
+      } catch (err) { mostrarMsg('Erro: ' + err.message, true); }
+    });
+    modal.addEventListener('click', (e) => { if (e.target === modal) fecharModal(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.style.display === 'flex') fecharModal(); });
+    carregarProdutos();
+  </script>
+</body>
+</html>

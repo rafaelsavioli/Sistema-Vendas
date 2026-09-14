@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Vendas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout">
+    <main class="container">
+      <h2 class="display">Visão geral</h2>
+      <div class="stat-strip">
+        <div class="stat"><div class="stat-num" id="statClientes">–</div><div class="stat-label">Clientes</div></div>
+        <div class="stat"><div class="stat-num" id="statProdutos">–</div><div class="stat-label">Produtos</div></div>
+        <div class="stat"><div class="stat-num" id="statVendas">–</div><div class="stat-label">Vendas</div></div>
+      </div>
+      <div class="ledger">
+        <a class="ledger-row" href="clientes.html"><span class="ledger-num">01</span><span class="ledger-title">Clientes</span><span class="ledger-arrow" aria-hidden="true">→</span></a>
+        <a class="ledger-row" href="produtos.html"><span class="ledger-num">02</span><span class="ledger-title">Produtos</span><span class="ledger-arrow" aria-hidden="true">→</span></a>
+        <a class="ledger-row" href="vendas.html"><span class="ledger-num">03</span><span class="ledger-title">Vendas</span><span class="ledger-arrow" aria-hidden="true">→</span></a>
+      </div>
+    </main>
+  </div>
+  <nav class="nav-floating" aria-label="Navegação principal">
+    <a href="index.html" class="active" aria-current="page"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">home</span></span><span class="nav-label">Início</span></a>
+    <a href="clientes.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">group</span></span><span class="nav-label">Clientes</span></a>
+    <a href="produtos.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">inventory_2</span></span><span class="nav-label">Produtos</span></a>
+    <a href="vendas.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">point_of_sale</span></span><span class="nav-label">Vendas</span></a>
+  </nav>
+  <script>
+    'use strict';
+    Promise.all([fetch('/api/clientes').then(r=>r.json()).catch(()=>[]), fetch('/api/produtos').then(r=>r.json()).catch(()=>[]), fetch('/api/vendas').then(r=>r.json()).catch(()=>[])]).then(([c,p,v]) => {
+      document.getElementById('statClientes').textContent = c.length ?? 0;
+      document.getElementById('statProdutos').textContent = p.length ?? 0;
+      document.getElementById('statVendas').textContent = v.length ?? 0;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vendas - Sistema de Vendas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout">
+    <main class="container">
+      <div class="page-head">
+        <h2 class="display">Vendas</h2>
+        <button class="md-fab" onclick="abrirModal()"><span class="material-symbols-outlined" aria-hidden="true">add_shopping_cart</span>Nova venda</button>
+      </div>
+      <div class="table-wrap">
+        <table id="tabelaVendas">
+          <thead><tr><th scope="col">ID</th><th scope="col">Cliente</th><th scope="col">Produto</th><th scope="col">Qtd</th><th scope="col">Total</th><th scope="col">Data</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="modal" class="md-dialog-scrim" style="display:none;">
+        <div class="md-dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+          <h2 id="modalTitulo">Nova Venda</h2>
+          <form id="formVenda">
+            <div class="field"><label for="id_cliente">Cliente *</label><select id="id_cliente" name="id_cliente" required><option value="">Selecione um cliente</option></select></div>
+            <div class="field"><label for="id_produto">Produto *</label><select id="id_produto" name="id_produto" required><option value="">Selecione um produto</option></select>
+              <div class="chip-row" id="chipProduto" style="display:none;"></div>
+            </div>
+            <div class="field"><label for="qtd">Quantidade *</label><input type="number" id="qtd" name="qtd" min="1" placeholder="1" required inputmode="numeric"></div>
+            <div class="dialog-actions">
+              <button type="button" class="md-btn md-btn-text" onclick="fecharModal()">Cancelar</button>
+              <button type="submit" class="md-btn md-btn-filled"><span class="material-symbols-outlined" aria-hidden="true">check</span>Registrar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+  <nav class="nav-floating" aria-label="Navegação principal">
+    <a href="index.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">home</span></span><span class="nav-label">Início</span></a>
+    <a href="clientes.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">group</span></span><span class="nav-label">Clientes</span></a>
+    <a href="produtos.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">inventory_2</span></span><span class="nav-label">Produtos</span></a>
+    <a href="vendas.html" class="active" aria-current="page"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">point_of_sale</span></span><span class="nav-label">Vendas</span></a>
+  </nav>
+  <div id="snackbar" role="status"></div>
+  <script>
+    'use strict';
+    const API_VENDAS = '/api/vendas', API_OPCOES = '/api/vendas/opcoes';
+    const tbody = document.querySelector('#tabelaVendas tbody');
+    const modal = document.getElementById('modal'), form = document.getElementById('formVenda'), snack = document.getElementById('snackbar');
+    const selectCliente = document.getElementById('id_cliente'), selectProduto = document.getElementById('id_produto'), chipBox = document.getElementById('chipProduto');
+    let snackTimer;
+    function fmtValor(v) { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
+    function fmtData(d) { return new Date(d).toLocaleString('pt-BR'); }
+    function mostrarMsg(texto, erro = false) {
+      snack.innerHTML = `<span class="material-symbols-outlined">${erro ? 'error' : 'check_circle'}</span>${texto}`;
+      snack.className = erro ? 'error' : ''; snack.classList.add('show');
+      clearTimeout(snackTimer); snackTimer = setTimeout(() => snack.classList.remove('show'), 3500);
+    }
+    async function carregarVendas() {
+      try {
+        const res = await fetch(API_VENDAS); const vendas = await res.json(); tbody.innerHTML = '';
+        if (!vendas.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="6"><span class="material-symbols-outlined big-icon">receipt_long</span>Nenhuma venda registrada</td></tr>'; return; }
+        vendas.forEach(v => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${v.id}</td><td>${v.cliente_nome}</td><td>${v.produto_nome}</td><td>${v.qtd}</td><td><span class="chip-valor">${fmtValor(v.valor)}</span></td><td>${fmtData(v.data_venda)}</td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (err) { mostrarMsg('Erro: ' + err.message, true); }
+    }
+    async function carregarOpcoes() {
+      try {
+        const res = await fetch(API_OPCOES); const { clientes, produtos } = await res.json();
+        selectCliente.innerHTML = '<option value="">Selecione um cliente</option>';
+        clientes.forEach(c => selectCliente.innerHTML += `<option value="${c.id}">${c.nome}</option>`);
+        selectProduto.innerHTML = '<option value="">Selecione um produto</option>';
+        produtos.forEach(p => selectProduto.innerHTML += `<option value="${p.id}" data-valor="${p.valor}" data-estoque="${p.qtd}">${p.nome} - ${fmtValor(p.valor)} (Estoque: ${p.qtd})</option>`);
+      } catch (err) { mostrarMsg('Erro ao carregar opções', true); }
+    }
+    selectProduto.addEventListener('change', () => {
+      const opt = selectProduto.selectedOptions[0];
+      if (!opt || !opt.value) { chipBox.style.display = 'none'; chipBox.innerHTML = ''; return; }
+      chipBox.style.display = 'flex';
+      chipBox.innerHTML = `<span class="assist-chip"><span class="material-symbols-outlined" style="font-size:16px">payments</span>${fmtValor(opt.dataset.valor)}</span><span class="assist-chip"><span class="material-symbols-outlined" style="font-size:16px">inventory</span>Estoque: ${opt.dataset.estoque}</span>`;
+    });
+    function abrirModal() { form.reset(); chipBox.style.display = 'none'; chipBox.innerHTML = ''; carregarOpcoes(); modal.style.display = 'flex'; setTimeout(function () { selectCliente.focus(); }, 50); }
+    function fecharModal() { modal.style.display = 'none'; }
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id_cliente = selectCliente.value, id_produto = selectProduto.value, qtd = parseInt(document.getElementById('qtd').value);
+      if (!id_cliente || !id_produto || !qtd) { mostrarMsg('Preencha todos os campos', true); return; }
+      try {
+        const res = await fetch(API_VENDAS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id_cliente: parseInt(id_cliente), id_produto: parseInt(id_produto), qtd }) });
+        const d = await res.json(); if (!res.ok) throw new Error(d.erro);
+        mostrarMsg('Venda registrada!'); fecharModal(); carregarVendas();
+      } catch (err) { mostrarMsg('Erro: ' + err.message, true); }
+    });
+    modal.addEventListener('click', (e) => { if (e.target === modal) fecharModal(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.style.display === 'flex') fecharModal(); });
+    carregarVendas();
+  </script>
+</body>
+</html>
