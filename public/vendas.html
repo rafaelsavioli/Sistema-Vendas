@@ -13,8 +13,18 @@
   <div class="layout">
     <main class="container">
       <div class="page-head">
-        <h2 class="display">Vendas</h2>
+        <div>
+          <h1 class="display">Vendas</h1>
+          <p class="hero-sub" id="resumoVendas">Registre vendas com baixa automática de estoque.</p>
+        </div>
         <button class="md-fab" onclick="abrirModal()"><span class="material-symbols-outlined" aria-hidden="true">add_shopping_cart</span>Nova venda</button>
+      </div>
+      <div class="toolbar">
+        <label class="search-field">
+          <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          <input type="search" id="busca" placeholder="Buscar por cliente ou produto…" autocomplete="off">
+        </label>
+        <span class="contador" id="contador"></span>
       </div>
       <div class="table-wrap">
         <table id="tabelaVendas">
@@ -53,32 +63,59 @@
     const tbody = document.querySelector('#tabelaVendas tbody');
     const modal = document.getElementById('modal'), form = document.getElementById('formVenda'), snack = document.getElementById('snackbar');
     const selectCliente = document.getElementById('id_cliente'), selectProduto = document.getElementById('id_produto'), chipBox = document.getElementById('chipProduto');
+    const busca = document.getElementById('busca'), contador = document.getElementById('contador'), resumo = document.getElementById('resumoVendas');
+    let todas = [];
     let snackTimer;
     function fmtValor(v) { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
     function fmtData(d) { return new Date(d).toLocaleString('pt-BR'); }
+    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = String(t ?? ''); return d.innerHTML; }
     function mostrarMsg(texto, erro = false) {
       snack.innerHTML = `<span class="material-symbols-outlined">${erro ? 'error' : 'check_circle'}</span>${texto}`;
       snack.className = erro ? 'error' : ''; snack.classList.add('show');
       clearTimeout(snackTimer); snackTimer = setTimeout(() => snack.classList.remove('show'), 3500);
     }
+    function mostrarSkeleton() {
+      tbody.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td data-label="ID"><span class="skeleton">00</span></td><td data-label="Cliente"><span class="skeleton">Carregando cliente</span></td><td data-label="Produto"><span class="skeleton">Carregando produto</span></td><td data-label="Qtd"><span class="skeleton">00</span></td><td data-label="Total"><span class="skeleton">R$ 0,00</span></td><td data-label="Data"><span class="skeleton">00/00/0000</span></td>';
+        tbody.appendChild(tr);
+      }
+    }
+    function render() {
+      const q = busca.value.trim().toLowerCase();
+      const lista = !q ? todas : todas.filter(v =>
+        String(v.cliente_nome || '').toLowerCase().includes(q) ||
+        String(v.produto_nome || '').toLowerCase().includes(q));
+      tbody.innerHTML = '';
+      contador.textContent = todas.length ? `${lista.length} de ${todas.length}` : '';
+      if (!todas.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="6"><span class="material-symbols-outlined big-icon">receipt_long</span>Nenhuma venda registrada</td></tr>'; return; }
+      if (!lista.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="6"><span class="material-symbols-outlined big-icon">search_off</span>Nenhum resultado para a busca</td></tr>'; return; }
+      lista.forEach(v => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td data-label="ID">${v.id}</td><td data-label="Cliente">${escapeHtml(v.cliente_nome)}</td><td data-label="Produto">${escapeHtml(v.produto_nome)}</td><td data-label="Qtd">${v.qtd}</td><td data-label="Total"><span class="chip-valor">${fmtValor(v.valor)}</span></td><td data-label="Data">${fmtData(v.data_venda)}</td>`;
+        tbody.appendChild(tr);
+      });
+      const total = todas.reduce((s, v) => s + Number(v.valor || 0), 0);
+      resumo.textContent = `${todas.length} venda(s) • Total ${fmtValor(total)} • Baixa automática de estoque.`;
+    }
     async function carregarVendas() {
+      mostrarSkeleton();
       try {
-        const res = await fetch(API_VENDAS); const vendas = await res.json(); tbody.innerHTML = '';
-        if (!vendas.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="6"><span class="material-symbols-outlined big-icon">receipt_long</span>Nenhuma venda registrada</td></tr>'; return; }
-        vendas.forEach(v => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${v.id}</td><td>${v.cliente_nome}</td><td>${v.produto_nome}</td><td>${v.qtd}</td><td><span class="chip-valor">${fmtValor(v.valor)}</span></td><td>${fmtData(v.data_venda)}</td>`;
-          tbody.appendChild(tr);
-        });
-      } catch (err) { mostrarMsg('Erro: ' + err.message, true); }
+        const res = await fetch(API_VENDAS); const vendas = await res.json();
+        if (!res.ok) throw new Error(vendas.erro || 'Falha ao carregar');
+        todas = Array.isArray(vendas) ? vendas : [];
+        render();
+      } catch (err) { tbody.innerHTML = ''; mostrarMsg('Erro: ' + err.message, true); }
     }
     async function carregarOpcoes() {
       try {
         const res = await fetch(API_OPCOES); const { clientes, produtos } = await res.json();
+        if (!res.ok) throw new Error('Falha ao carregar opções');
         selectCliente.innerHTML = '<option value="">Selecione um cliente</option>';
-        clientes.forEach(c => selectCliente.innerHTML += `<option value="${c.id}">${c.nome}</option>`);
+        clientes.forEach(c => selectCliente.innerHTML += `<option value="${c.id}">${escapeHtml(c.nome)}</option>`);
         selectProduto.innerHTML = '<option value="">Selecione um produto</option>';
-        produtos.forEach(p => selectProduto.innerHTML += `<option value="${p.id}" data-valor="${p.valor}" data-estoque="${p.qtd}">${p.nome} - ${fmtValor(p.valor)} (Estoque: ${p.qtd})</option>`);
+        produtos.forEach(p => selectProduto.innerHTML += `<option value="${p.id}" data-valor="${p.valor}" data-estoque="${p.qtd}">${escapeHtml(p.nome)} - ${fmtValor(p.valor)} (Estoque: ${p.qtd})</option>`);
       } catch (err) { mostrarMsg('Erro ao carregar opções', true); }
     }
     selectProduto.addEventListener('change', () => {
@@ -99,6 +136,7 @@
         mostrarMsg('Venda registrada!'); fecharModal(); carregarVendas();
       } catch (err) { mostrarMsg('Erro: ' + err.message, true); }
     });
+    busca.addEventListener('input', render);
     modal.addEventListener('click', (e) => { if (e.target === modal) fecharModal(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.style.display === 'flex') fecharModal(); });
     carregarVendas();

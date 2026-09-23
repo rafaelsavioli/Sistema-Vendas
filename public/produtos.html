@@ -13,8 +13,18 @@
   <div class="layout">
     <main class="container">
       <div class="page-head">
-        <h2 class="display">Produtos</h2>
+        <div>
+          <h1 class="display">Produtos</h1>
+          <p class="hero-sub">Controle estoque e preços com alertas visuais.</p>
+        </div>
         <button class="md-fab" onclick="abrirModal()"><span class="material-symbols-outlined" aria-hidden="true">add</span>Novo</button>
+      </div>
+      <div class="toolbar">
+        <label class="search-field">
+          <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          <input type="search" id="busca" placeholder="Buscar produto…" autocomplete="off">
+        </label>
+        <span class="contador" id="contador"></span>
       </div>
       <div class="table-wrap">
         <table id="tabelaProdutos">
@@ -54,26 +64,53 @@
     const form = document.getElementById('formProduto');
     const snack = document.getElementById('snackbar');
     const modalTitulo = document.getElementById('modalTitulo');
+    const busca = document.getElementById('busca');
+    const contador = document.getElementById('contador');
+    let todos = [];
     let snackTimer;
     function fmtValor(v) { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
     function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-    function escapeJs(t) { return t.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+    function escapeJs(t) { return String(t || '').replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+    function badgeEstoque(qtd) {
+      if (qtd === 0) return ' <span class="badge badge-danger">Esgotado</span>';
+      if (qtd <= 5) return ' <span class="badge badge-warn">Baixo</span>';
+      return '';
+    }
     function mostrarMsg(texto, erro = false) {
       snack.innerHTML = `<span class="material-symbols-outlined">${erro ? 'error' : 'check_circle'}</span>${texto}`;
       snack.className = erro ? 'error' : ''; snack.classList.add('show');
       clearTimeout(snackTimer); snackTimer = setTimeout(() => snack.classList.remove('show'), 3500);
     }
+    function mostrarSkeleton() {
+      tbody.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td data-label="ID"><span class="skeleton">00</span></td><td data-label="Nome"><span class="skeleton">Carregando produto</span></td><td data-label="Qtd"><span class="skeleton">00</span></td><td data-label="Valor"><span class="skeleton">R$ 0,00</span></td><td data-label="Ações" class="actions"><span class="skeleton">•••</span></td>';
+        tbody.appendChild(tr);
+      }
+    }
+    function render() {
+      const q = busca.value.trim().toLowerCase();
+      const lista = !q ? todos : todos.filter(p => String(p.nome || '').toLowerCase().includes(q));
+      tbody.innerHTML = '';
+      contador.textContent = todos.length ? `${lista.length} de ${todos.length}` : '';
+      if (!todos.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="5"><span class="material-symbols-outlined big-icon">inventory</span>Nenhum produto cadastrado</td></tr>'; return; }
+      if (!lista.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="5"><span class="material-symbols-outlined big-icon">search_off</span>Nenhum resultado para a busca</td></tr>'; return; }
+      lista.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td data-label="ID">${p.id}</td><td data-label="Nome">${escapeHtml(p.nome)}${badgeEstoque(Number(p.qtd))}</td><td data-label="Qtd">${p.qtd}</td><td data-label="Valor"><span class="chip-valor">${fmtValor(p.valor)}</span></td>
+        <td data-label="Ações" class="actions"><button class="md-icon-btn" title="Editar" aria-label="Editar ${escapeHtml(p.nome)}" onclick="editarProduto(${p.id}, '${escapeJs(p.nome)}', ${p.qtd}, ${p.valor})"><span class="material-symbols-outlined">edit</span></button><button class="md-icon-btn danger" title="Excluir" aria-label="Excluir ${escapeHtml(p.nome)}" onclick="excluirProduto(${p.id})"><span class="material-symbols-outlined">delete</span></button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
     async function carregarProdutos() {
+      mostrarSkeleton();
       try {
-        const res = await fetch(API); const produtos = await res.json(); tbody.innerHTML = '';
-        if (!produtos.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="5"><span class="material-symbols-outlined big-icon">inventory</span>Nenhum produto cadastrado</td></tr>'; return; }
-        produtos.forEach(p => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${p.id}</td><td>${escapeHtml(p.nome)}</td><td>${p.qtd}</td><td><span class="chip-valor">${fmtValor(p.valor)}</span></td>
-          <td class="actions"><button class="md-icon-btn" onclick="editarProduto(${p.id}, '${escapeJs(p.nome)}', ${p.qtd}, ${p.valor})"><span class="material-symbols-outlined">edit</span></button><button class="md-icon-btn danger" onclick="excluirProduto(${p.id})"><span class="material-symbols-outlined">delete</span></button></td>`;
-          tbody.appendChild(tr);
-        });
-      } catch (err) { mostrarMsg('Erro ao carregar: ' + err.message, true); }
+        const res = await fetch(API); const produtos = await res.json();
+        if (!res.ok) throw new Error(produtos.erro || 'Falha ao carregar');
+        todos = Array.isArray(produtos) ? produtos : [];
+        render();
+      } catch (err) { tbody.innerHTML = ''; mostrarMsg('Erro ao carregar: ' + err.message, true); }
     }
     function abrirModal(p = null) {
       form.reset(); document.getElementById('produtoId').value = '';
@@ -99,6 +136,7 @@
         mostrarMsg(id ? 'Produto atualizado!' : 'Produto criado!'); fecharModal(); carregarProdutos();
       } catch (err) { mostrarMsg('Erro: ' + err.message, true); }
     });
+    busca.addEventListener('input', render);
     modal.addEventListener('click', (e) => { if (e.target === modal) fecharModal(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.style.display === 'flex') fecharModal(); });
     carregarProdutos();

@@ -12,13 +12,44 @@
 <body>
   <div class="layout">
     <main class="container">
-      <h2 class="display">Visão geral</h2>
-      <div class="stat-strip">
-        <div class="stat"><div class="stat-num" id="statClientes">–</div><div class="stat-label">Clientes</div></div>
-        <div class="stat"><div class="stat-num" id="statProdutos">–</div><div class="stat-label">Produtos</div></div>
-        <div class="stat"><div class="stat-num" id="statVendas">–</div><div class="stat-label">Vendas</div></div>
+      <header class="hero">
+        <div class="hero-eyebrow">Sistema de vendas</div>
+        <h1 class="display">Visão geral</h1>
+        <p class="hero-sub" id="heroSub">Acompanhe clientes, produtos, vendas e receita em um só lugar.</p>
+        <div class="hero-actions">
+          <a class="md-fab" href="vendas.html"><span class="material-symbols-outlined" aria-hidden="true">add_shopping_cart</span>Nova venda</a>
+          <a class="md-btn md-btn-text" href="produtos.html">Ver produtos</a>
+        </div>
+      </header>
+
+      <div class="stats-grid" role="status" aria-live="polite" aria-label="Resumo">
+        <div class="stat"><div class="stat-num skeleton" id="statClientes">–</div><div class="stat-label">Clientes</div></div>
+        <div class="stat"><div class="stat-num skeleton" id="statProdutos">–</div><div class="stat-label">Produtos</div></div>
+        <div class="stat"><div class="stat-num skeleton" id="statVendas">–</div><div class="stat-label">Vendas</div></div>
+        <div class="stat"><div class="stat-num skeleton" id="statReceita">–</div><div class="stat-label">Receita</div></div>
       </div>
-      <div class="ledger">
+
+      <section class="section" aria-labelledby="tituloEstoque">
+        <div class="section-head">
+          <h2 class="section-title" id="tituloEstoque"><span class="material-symbols-outlined" aria-hidden="true">inventory</span>Estoque baixo</h2>
+          <a class="link-more" href="produtos.html">Ver tudo</a>
+        </div>
+        <div class="dash-list" id="listaEstoque">
+          <div class="dash-row"><div class="dash-main"><div class="dash-title skeleton">Carregando</div><div class="dash-sub skeleton">…</div></div></div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="tituloVendas">
+        <div class="section-head">
+          <h2 class="section-title" id="tituloVendas"><span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>Últimas vendas</h2>
+          <a class="link-more" href="vendas.html">Ver tudo</a>
+        </div>
+        <div class="dash-list" id="listaVendas">
+          <div class="dash-row"><div class="dash-main"><div class="dash-title skeleton">Carregando</div><div class="dash-sub skeleton">…</div></div></div>
+        </div>
+      </section>
+
+      <div class="ledger" aria-label="Acesso rápido">
         <a class="ledger-row" href="clientes.html"><span class="ledger-num">01</span><span class="ledger-title">Clientes</span><span class="ledger-arrow" aria-hidden="true">→</span></a>
         <a class="ledger-row" href="produtos.html"><span class="ledger-num">02</span><span class="ledger-title">Produtos</span><span class="ledger-arrow" aria-hidden="true">→</span></a>
         <a class="ledger-row" href="vendas.html"><span class="ledger-num">03</span><span class="ledger-title">Vendas</span><span class="ledger-arrow" aria-hidden="true">→</span></a>
@@ -31,13 +62,79 @@
     <a href="produtos.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">inventory_2</span></span><span class="nav-label">Produtos</span></a>
     <a href="vendas.html"><span class="nav-icon" aria-hidden="true"><span class="material-symbols-outlined">point_of_sale</span></span><span class="nav-label">Vendas</span></a>
   </nav>
+  <div id="snackbar" role="status"></div>
   <script>
     'use strict';
-    Promise.all([fetch('/api/clientes').then(r=>r.json()).catch(()=>[]), fetch('/api/produtos').then(r=>r.json()).catch(()=>[]), fetch('/api/vendas').then(r=>r.json()).catch(()=>[])]).then(([c,p,v]) => {
-      document.getElementById('statClientes').textContent = c.length ?? 0;
-      document.getElementById('statProdutos').textContent = p.length ?? 0;
-      document.getElementById('statVendas').textContent = v.length ?? 0;
-    });
+    const snack = document.getElementById('snackbar');
+    let snackTimer;
+    function mostrarMsg(texto, erro = false) {
+      snack.innerHTML = `<span class="material-symbols-outlined">${erro ? 'error' : 'check_circle'}</span>${texto}`;
+      snack.className = erro ? 'error' : ''; snack.classList.add('show');
+      clearTimeout(snackTimer); snackTimer = setTimeout(() => snack.classList.remove('show'), 3500);
+    }
+    function fmtValor(v) { return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ','); }
+    function fmtData(d) { try { return new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return '–'; } }
+    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = String(t ?? ''); return d.innerHTML; }
+    function setStat(id, valor) {
+      const el = document.getElementById(id);
+      el.classList.remove('skeleton');
+      el.textContent = valor;
+    }
+    async function carregarDashboard() {
+      try {
+        const res = await fetch('/api/dashboard');
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.erro || 'Falha ao carregar');
+        setStat('statClientes', d.totais.clientes ?? 0);
+        setStat('statProdutos', d.totais.produtos ?? 0);
+        setStat('statVendas', d.totais.vendas ?? 0);
+        setStat('statReceita', fmtValor(d.totais.receita));
+        if (d.totais.vendas > 0) {
+          document.getElementById('heroSub').textContent =
+            `${d.totais.vendas} venda(s) • Ticket médio ${fmtValor(d.ticketMedio)} • ${d.totais.clientes} cliente(s) ativos.`;
+        }
+        const listaEstoque = document.getElementById('listaEstoque');
+        if (!d.estoqueBaixo.length) {
+          listaEstoque.innerHTML = '<div class="dash-row"><div class="dash-main"><div class="dash-title">Estoque saudável</div><div class="dash-sub">Nenhum produto com 5 unidades ou menos.</div></div><span class="badge badge-ok">OK</span></div>';
+        } else {
+          listaEstoque.innerHTML = '';
+          d.estoqueBaixo.forEach(p => {
+            const badge = p.qtd === 0
+              ? '<span class="badge badge-danger">Esgotado</span>'
+              : '<span class="badge badge-warn">Baixo: ' + p.qtd + '</span>';
+            const a = document.createElement('a');
+            a.className = 'dash-row'; a.href = 'produtos.html';
+            a.innerHTML = `<div class="dash-main"><div class="dash-title">${escapeHtml(p.nome)}</div><div class="dash-sub">Estoque: ${p.qtd} • ${fmtValor(p.valor)}</div></div>${badge}`;
+            listaEstoque.appendChild(a);
+          });
+        }
+        const listaVendas = document.getElementById('listaVendas');
+        if (!d.ultimasVendas.length) {
+          listaVendas.innerHTML = '<div class="dash-row"><div class="dash-main"><div class="dash-title">Nenhuma venda ainda</div><div class="dash-sub">Registre a primeira venda para ver o resumo aqui.</div></div><a class="link-more" href="vendas.html">Criar</a></div>';
+        } else {
+          listaVendas.innerHTML = '';
+          d.ultimasVendas.forEach(v => {
+            const a = document.createElement('a');
+            a.className = 'dash-row'; a.href = 'vendas.html';
+            a.innerHTML = `<div class="dash-main"><div class="dash-title">${escapeHtml(v.cliente_nome)}</div><div class="dash-sub">${escapeHtml(v.produto_nome)} × ${v.qtd} • ${fmtData(v.data_venda)}</div></div><div class="dash-valor">${fmtValor(v.valor)}</div>`;
+            listaVendas.appendChild(a);
+          });
+        }
+      } catch (err) {
+        const viaArquivo = location.protocol === 'file:';
+        const dica = viaArquivo
+          ? 'Abra via http://localhost:3000/index.html (o arquivo direto não acessa a API).'
+          : 'Verifique se o servidor está rodando (node app.js).';
+        ['statClientes', 'statProdutos', 'statVendas', 'statReceita'].forEach(id => {
+          const el = document.getElementById(id);
+          el.classList.remove('skeleton'); el.textContent = '–';
+        });
+        document.getElementById('listaEstoque').innerHTML = `<div class="dash-row"><div class="dash-main"><div class="dash-title">Não foi possível carregar</div><div class="dash-sub">${dica}</div></div></div>`;
+        document.getElementById('listaVendas').innerHTML = `<div class="dash-row"><div class="dash-main"><div class="dash-title">Não foi possível carregar</div><div class="dash-sub">${dica}</div></div></div>`;
+        mostrarMsg(viaArquivo ? 'Abra pelo servidor: http://localhost:3000' : 'Erro ao carregar dashboard', true);
+      }
+    }
+    carregarDashboard();
   </script>
 </body>
 </html>

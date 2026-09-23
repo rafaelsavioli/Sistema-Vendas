@@ -13,8 +13,18 @@
   <div class="layout">
     <main class="container">
       <div class="page-head">
-        <h2 class="display">Clientes</h2>
+        <div>
+          <h1 class="display">Clientes</h1>
+          <p class="hero-sub">Cadastre, edite e encontre clientes rapidamente.</p>
+        </div>
         <button class="md-fab" onclick="abrirModal()"><span class="material-symbols-outlined" aria-hidden="true">add</span>Novo</button>
+      </div>
+      <div class="toolbar">
+        <label class="search-field">
+          <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          <input type="search" id="busca" placeholder="Buscar por nome, email ou telefone…" autocomplete="off">
+        </label>
+        <span class="contador" id="contador"></span>
       </div>
       <div class="table-wrap">
         <table id="tabelaClientes">
@@ -54,6 +64,9 @@
     const form = document.getElementById('formCliente');
     const snack = document.getElementById('snackbar');
     const modalTitulo = document.getElementById('modalTitulo');
+    const busca = document.getElementById('busca');
+    const contador = document.getElementById('contador');
+    let todos = [];
     let snackTimer;
     function mostrarMsg(texto, erro = false) {
       snack.innerHTML = `<span class="material-symbols-outlined">${erro ? 'error' : 'check_circle'}</span>${texto}`;
@@ -61,18 +74,40 @@
       clearTimeout(snackTimer); snackTimer = setTimeout(() => snack.classList.remove('show'), 3500);
     }
     function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-    function escapeJs(t) { return t.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+    function escapeJs(t) { return String(t || '').replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+    function mostrarSkeleton() {
+      tbody.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td data-label="ID"><span class="skeleton">00</span></td><td data-label="Nome"><span class="skeleton">Carregando nome</span></td><td data-label="Email"><span class="skeleton">email@email.com</span></td><td data-label="Telefone"><span class="skeleton">(00) 00000-0000</span></td><td data-label="Ações" class="actions"><span class="skeleton">•••</span></td>';
+        tbody.appendChild(tr);
+      }
+    }
+    function render() {
+      const q = busca.value.trim().toLowerCase();
+      const lista = !q ? todos : todos.filter(c =>
+        String(c.nome || '').toLowerCase().includes(q) ||
+        String(c.email || '').toLowerCase().includes(q) ||
+        String(c.telefone || '').toLowerCase().includes(q));
+      tbody.innerHTML = '';
+      contador.textContent = todos.length ? `${lista.length} de ${todos.length}` : '';
+      if (!todos.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="5"><span class="material-symbols-outlined big-icon">group_off</span>Nenhum cliente cadastrado</td></tr>'; return; }
+      if (!lista.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="5"><span class="material-symbols-outlined big-icon">search_off</span>Nenhum resultado para a busca</td></tr>'; return; }
+      lista.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td data-label="ID">${c.id}</td><td data-label="Nome">${escapeHtml(c.nome)}</td><td data-label="Email">${escapeHtml(c.email || '–')}</td><td data-label="Telefone">${escapeHtml(c.telefone || '–')}</td>
+        <td data-label="Ações" class="actions"><button class="md-icon-btn" title="Editar" aria-label="Editar ${escapeHtml(c.nome)}" onclick="editarCliente(${c.id}, '${escapeJs(c.nome)}', '${escapeJs(c.email || '')}', '${escapeJs(c.telefone || '')}')"><span class="material-symbols-outlined">edit</span></button><button class="md-icon-btn danger" title="Excluir" aria-label="Excluir ${escapeHtml(c.nome)}" onclick="excluirCliente(${c.id})"><span class="material-symbols-outlined">delete</span></button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
     async function carregarClientes() {
+      mostrarSkeleton();
       try {
-        const res = await fetch(API); const clientes = await res.json(); tbody.innerHTML = '';
-        if (!clientes.length) { tbody.innerHTML = '<tr class="empty-state"><td colspan="5"><span class="material-symbols-outlined big-icon">group_off</span>Nenhum cliente cadastrado</td></tr>'; return; }
-        clientes.forEach(c => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${c.id}</td><td>${escapeHtml(c.nome)}</td><td>${escapeHtml(c.email || '–')}</td><td>${escapeHtml(c.telefone || '–')}</td>
-          <td class="actions"><button class="md-icon-btn" title="Editar" onclick="editarCliente(${c.id}, '${escapeJs(c.nome)}', '${escapeJs(c.email || '')}', '${escapeJs(c.telefone || '')}')"><span class="material-symbols-outlined">edit</span></button><button class="md-icon-btn danger" title="Excluir" onclick="excluirCliente(${c.id})"><span class="material-symbols-outlined">delete</span></button></td>`;
-          tbody.appendChild(tr);
-        });
-      } catch (err) { mostrarMsg('Erro ao carregar: ' + err.message, true); }
+        const res = await fetch(API); const clientes = await res.json();
+        if (!res.ok) throw new Error(clientes.erro || 'Falha ao carregar');
+        todos = Array.isArray(clientes) ? clientes : [];
+        render();
+      } catch (err) { tbody.innerHTML = ''; mostrarMsg('Erro ao carregar: ' + err.message, true); }
     }
     function abrirModal(c = null) {
       form.reset(); document.getElementById('clienteId').value = '';
@@ -98,6 +133,7 @@
         mostrarMsg(id ? 'Cliente atualizado!' : 'Cliente criado!'); fecharModal(); carregarClientes();
       } catch (err) { mostrarMsg('Erro: ' + err.message, true); }
     });
+    busca.addEventListener('input', render);
     modal.addEventListener('click', (e) => { if (e.target === modal) fecharModal(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.style.display === 'flex') fecharModal(); });
     carregarClientes();

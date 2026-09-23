@@ -176,6 +176,33 @@ app.get('/api/vendas/opcoes', async (req, res) => {
   }
 });
 
+// ========== API DASHBOARD ==========
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const [[c]] = await pool.query('SELECT COUNT(*) AS total FROM Clientes');
+    const [[p]] = await pool.query('SELECT COUNT(*) AS total FROM Produtos');
+    const [[v]] = await pool.query('SELECT COUNT(*) AS total, COALESCE(SUM(valor), 0) AS receita FROM Vendas');
+    const [estoqueBaixo] = await pool.query('SELECT id, nome, qtd, valor FROM Produtos WHERE qtd <= 5 ORDER BY qtd ASC LIMIT 5');
+    const [ultimasVendas] = await pool.query(`
+      SELECT v.id, v.qtd, v.valor, v.data_venda, c.nome as cliente_nome, p.nome as produto_nome
+      FROM Vendas v
+      JOIN Clientes c ON v.id_cliente = c.id
+      JOIN Produtos p ON v.id_produto = p.id
+      ORDER BY v.data_venda DESC LIMIT 5
+    `);
+    const receita = Number(v.receita) || 0;
+    const totalVendas = Number(v.total) || 0;
+    res.json({
+      totais: { clientes: Number(c.total) || 0, produtos: Number(p.total) || 0, vendas: totalVendas, receita },
+      ticketMedio: totalVendas ? receita / totalVendas : 0,
+      estoqueBaixo,
+      ultimasVendas
+    });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 app.post('/api/vendas', async (req, res) => {
   const { id_cliente, id_produto, qtd } = req.body;
   if (!id_cliente || !id_produto || !qtd) return res.status(400).json({ erro: 'Todos os campos são obrigatórios' });
